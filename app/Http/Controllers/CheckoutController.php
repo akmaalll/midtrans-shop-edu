@@ -8,8 +8,6 @@ use Illuminate\Support\Facades\Auth;
 
 class CheckoutController extends Controller
 {
-
-
     public function process(Request $request)
     {
         $data = $request->all();
@@ -21,6 +19,31 @@ class CheckoutController extends Controller
             'status' => 'pending',
         ]);
 
+        // Set your Merchant Server Key
+        \Midtrans\Config::$serverKey = config('midtrans.server_key');
+        // Set to Development/Sandbox Environment (default). Set to true for Production Environment (accept real transaction).
+        \Midtrans\Config::$isProduction = config('midtrans.is_production');
+        // Set sanitization on (default)
+        \Midtrans\Config::$isSanitized = true;
+        // Set 3DS transaction for credit card to true
+        \Midtrans\Config::$is3ds = true;
+
+
+        $params = array(
+            'transaction_details' => array(
+                'order_id' => rand(),
+                'gross_amount' => $data['price'],
+            ),
+            'customer_details' => array(
+                'first_name' => Auth::user()->name,
+            )
+        );
+
+        $snapToken = \Midtrans\Snap::getSnapToken($params);
+
+        $transaction->snap_token = $snapToken;
+        $transaction->save();
+
         return redirect()->route('checkout', $transaction->id);
     }
 
@@ -30,5 +53,13 @@ class CheckoutController extends Controller
         $product = collect($products)->firstWhere('id', $transaction->product_id);
 
         return view('checkout',  compact('transaction', 'product'));
+    }
+
+    public function success(Transaction $transaction)
+    {
+        $transaction->status = 'success';
+        $transaction->save();
+
+        return view('success', compact('transaction'));
     }
 }
